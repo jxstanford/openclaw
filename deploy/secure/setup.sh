@@ -124,8 +124,11 @@ Next steps:
   5. Verify:
      deploy/secure/verify.sh
 
-  6. (Optional) Configure Tailscale Serve:
+  6. (Optional) Add Tailscale identity auth:
      SETUP_TAILSCALE=1 deploy/secure/setup.sh
+     This runs 'tailscale serve' on the HOST (not in Docker), proxying
+     your tailnet to localhost:18789. The gateway trusts Tailscale
+     identity headers (allowTailscale: true in config).
 
   7. (Optional) Connect remote nodes:
      On remote host: openclaw node run --host <gateway-dns> --port 18789

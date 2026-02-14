@@ -15,14 +15,13 @@
     },
     auth: {
       mode: "token",
-      // Token injected via OPENCLAW_GATEWAY_TOKEN env var in docker-compose
+      // Token injected via OPENCLAW_GATEWAY_TOKEN env var in docker-compose.
+      // allowTailscale: gateway trusts Tailscale identity headers when present.
+      // Tailscale Serve is configured on the host, not inside the container:
+      //   tailscale serve --bg http://localhost:18789
       allowTailscale: true,
     },
     reload: { mode: "hybrid", debounceMs: 300 },
-    tailscale: {
-      mode: "serve",
-      resetOnExit: false,
-    },
   },
 
   // ── Logging ──────────────────────────────────────────────────
