@@ -1,0 +1,3 @@
+# GeoIP refresh — every Sunday at 03:00 UTC.
+# /etc/environment is populated by entrypoint with container env vars.
+0 3 * * 0 root . /etc/environment; /usr/local/bin/refresh-geodb >> /var/log/geodb-refresh.log 2>&1
