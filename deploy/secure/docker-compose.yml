@@ -1,0 +1,107 @@
+# Secure OpenClaw deployment with Pipelock egress proxy.
+#
+# Architecture:
+#   proxy-net   (internal, no internet) — agents + gateway talk to Pipelock only
+#   egress      (external)              — Pipelock reaches the internet
+#   host-access (external)              — gateway publishes ports to host
+#
+# Usage:
+#   cp .env.example .env   # fill in values
+#   docker compose up -d
+
+services:
+  # ── Pipelock egress proxy ──────────────────────────────────────────
+  pipelock:
+    image: ghcr.io/luckypipewrench/pipelock:latest
+    command: ["run", "--config", "/config/pipelock.yaml", "--listen", "0.0.0.0:8888"]
+    volumes:
+      - ./pipelock.yaml:/config/pipelock.yaml:ro
+    networks:
+      proxy-net:
+        aliases:
+          - pipelock
+      egress: {}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/pipelock", "healthcheck", "--addr", "127.0.0.1:8888"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ── OpenClaw gateway ───────────────────────────────────────────────
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      # Route sandbox HTTP through Pipelock
+      HTTP_PROXY: http://pipelock:8888
+      HTTPS_PROXY: http://pipelock:8888
+      NO_PROXY: localhost,127.0.0.1
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    networks:
+      - proxy-net
+      - host-access
+    init: true
+    restart: unless-stopped
+    depends_on:
+      pipelock:
+        condition: service_healthy
+    command:
+      [
+        "node",
+        "openclaw.mjs",
+        "gateway",
+        "--allow-unconfigured",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+
+  # ── OpenClaw CLI (interactive) ─────────────────────────────────────
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+      HTTP_PROXY: http://pipelock:8888
+      HTTPS_PROXY: http://pipelock:8888
+      NO_PROXY: localhost,127.0.0.1
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
+    networks:
+      - proxy-net
+    stdin_open: true
+    tty: true
+    init: true
+    depends_on:
+      pipelock:
+        condition: service_healthy
+    entrypoint: ["node", "openclaw.mjs"]
+    profiles:
+      - cli
+
+networks:
+  # Internal network — agents cannot reach the internet directly.
+  proxy-net:
+    internal: true
+
+  # External network — only Pipelock is attached.
+  egress:
+    driver: bridge
+
+  # Host-facing network — gateway publishes ports here.
+  # Outbound traffic still routes through Pipelock via HTTP_PROXY.
+  host-access:
+    driver: bridge

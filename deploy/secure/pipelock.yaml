@@ -1,0 +1,136 @@
+# Pipelock egress proxy configuration for Secure OpenClaw deployment.
+# Balanced mode: blocks known-bad targets and secrets, allows general web access.
+# Docs: https://github.com/luckyPipewrench/pipelock
+
+version: 1
+mode: balanced
+
+# Domains agents may reach without restriction.
+api_allowlist:
+  # LLM providers
+  - "*.anthropic.com"
+  - "*.openai.com"
+  - "*.azure.com"
+  - "*.googleapis.com"
+  - "generativelanguage.googleapis.com"
+  - "*.together.xyz"
+  - "*.groq.com"
+  - "api.mistral.ai"
+  - "api.deepseek.com"
+  # Messaging channels
+  - "api.telegram.org"
+  - "*.discord.com"
+  - "gateway.discord.gg"
+  - "*.slack.com"
+  # Code hosting and package registries
+  - "github.com"
+  - "*.github.com"
+  - "*.githubusercontent.com"
+  - "gitlab.com"
+  - "*.gitlab.com"
+  - "registry.npmjs.org"
+  - "pypi.org"
+  - "*.pypi.org"
+  - "crates.io"
+  - "*.crates.io"
+  - "pkg.go.dev"
+  - "proxy.golang.org"
+  - "sum.golang.org"
+  # Search and documentation
+  - "*.google.com"
+  - "*.bing.com"
+  - "*.duckduckgo.com"
+  - "*.stackoverflow.com"
+  - "*.stackexchange.com"
+  - "*.wikipedia.org"
+
+fetch_proxy:
+  listen: "0.0.0.0:8888"
+  timeout_seconds: 30
+  max_response_mb: 10
+  user_agent: "Pipelock Fetch/1.0"
+
+  monitoring:
+    max_url_length: 2048
+    entropy_threshold: 4.5
+    max_requests_per_minute: 60
+
+    # Known exfiltration / paste targets.
+    blocklist:
+      - "*.pastebin.com"
+      - "*.hastebin.com"
+      - "*.paste.ee"
+      - "*.transfer.sh"
+      - "*.file.io"
+      - "*.requestbin.com"
+      - "*.pipedream.net"
+      - "*.webhook.site"
+      - "*.ngrok.io"
+      - "*.ngrok-free.app"
+      - "*.burpcollaborator.net"
+      - "*.interact.sh"
+      - "*.oastify.com"
+      - "*.canarytokens.com"
+
+# Data Loss Prevention — catch secret exfiltration.
+dlp:
+  scan_env: true
+  patterns:
+    - name: "Anthropic API Key"
+      regex: 'sk-ant-[a-zA-Z0-9\-_]{20,}'
+      severity: critical
+    - name: "OpenAI API Key"
+      regex: 'sk-proj-[a-zA-Z0-9\-_]{20,}'
+      severity: critical
+    - name: "GitHub Token"
+      regex: 'gh[ps]_[A-Za-z0-9_]{36,}'
+      severity: critical
+    - name: "Slack Token"
+      regex: 'xox[bpras]-[0-9a-zA-Z-]{15,}'
+      severity: critical
+    - name: "Discord Bot Token"
+      regex: '[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}'
+      severity: critical
+    - name: "AWS Access Key"
+      regex: 'AKIA[0-9A-Z]{16}'
+      severity: critical
+    - name: "Stripe Key"
+      regex: '[sr]k_(live|test)_[a-zA-Z0-9]{20,}'
+      severity: critical
+    - name: "Private Key Block"
+      regex: '-----BEGIN\s+(RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----'
+      severity: critical
+    - name: "Generic Long Secret"
+      regex: '(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*["\x27]?[A-Za-z0-9\-_]{32,}'
+      severity: high
+
+# Prompt injection detection on responses.
+response_scanning:
+  enabled: true
+  action: warn
+  patterns:
+    - name: "Prompt Injection"
+      regex: '(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules|context)'
+    - name: "Role Override"
+      regex: '(?i)you\s+are\s+(now\s+)?(a\s+)?(DAN|evil|unrestricted|jailbroken|unfiltered)'
+    - name: "Hidden Instruction"
+      regex: '(?i)(do\s+not\s+(reveal|tell|show)\s+this\s+to\s+the\s+user|hidden\s+instruction)'
+
+# SSRF prevention — block private/internal ranges.
+internal:
+  - "0.0.0.0/8"
+  - "127.0.0.0/8"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "169.254.0.0/16"
+  - "100.64.0.0/10"
+  - "::1/128"
+  - "fc00::/7"
+  - "fe80::/10"
+
+logging:
+  format: json
+  output: stdout
+  include_allowed: false
+  include_blocked: true
