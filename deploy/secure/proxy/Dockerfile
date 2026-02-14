@@ -1,6 +1,9 @@
 # Pipelock + GeoIP egress proxy.
-# Extends the stock Pipelock image with MaxMind GeoLite2-Country
-# CIDR extraction and weekly refresh via cron.
+# Extends the stock Pipelock image with db-ip Lite country
+# CIDR extraction and monthly refresh via cron.
+#
+# Data source: https://db-ip.com/db/download/ip-to-country-lite
+# License: CC BY 4.0 — no account or API key required.
 
 FROM ghcr.io/luckypipewrench/pipelock:latest AS pipelock-bin
 
@@ -12,7 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       cron \
       curl \
       python3-yaml \
-      unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Pipelock binary from official image
@@ -26,7 +28,8 @@ RUN chmod +x /usr/local/bin/refresh-geodb /usr/local/bin/entrypoint
 # Default blocked-countries list (can be overridden via bind mount)
 COPY geo-blocked-countries.conf /etc/geogate/blocked-countries.conf
 
-# Weekly cron: refresh GeoIP every Sunday at 03:00 UTC
+# Monthly cron: refresh GeoIP on the 2nd of each month at 03:00 UTC
+# (db-ip publishes on the 1st; we wait a day for propagation)
 COPY crontab /etc/cron.d/geodb-refresh
 RUN chmod 0644 /etc/cron.d/geodb-refresh && crontab /etc/cron.d/geodb-refresh
 

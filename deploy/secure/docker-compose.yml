@@ -16,9 +16,6 @@ services:
     build:
       context: ./proxy
       dockerfile: Dockerfile
-    environment:
-      MAXMIND_ACCOUNT_ID: ${MAXMIND_ACCOUNT_ID:-}
-      MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
     volumes:
       - ./pipelock.yaml:/config/pipelock-base.yaml:ro
       - ./proxy/geo-blocked-countries.conf:/etc/geogate/blocked-countries.conf:ro

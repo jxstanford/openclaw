@@ -1,3 +1,4 @@
-# GeoIP refresh — every Sunday at 03:00 UTC.
+# GeoIP refresh — 2nd of each month at 03:00 UTC.
+# db-ip publishes on the 1st; we wait a day for propagation.
 # /etc/environment is populated by entrypoint with container env vars.
-0 3 * * 0 root . /etc/environment; /usr/local/bin/refresh-geodb >> /var/log/geodb-refresh.log 2>&1
+0 3 2 * * root . /etc/environment; /usr/local/bin/refresh-geodb >> /var/log/geodb-refresh.log 2>&1

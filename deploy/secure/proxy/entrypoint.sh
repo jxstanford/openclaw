@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Pipelock + GeoIP entrypoint.
 # 1. Run initial GeoIP refresh (merges country CIDRs into Pipelock config)
-# 2. Start cron for weekly refresh
+# 2. Start cron for monthly refresh
 # 3. Start Pipelock with merged config
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] entrypoint: $*"; }
@@ -15,7 +15,7 @@ if [ ! -f /config/pipelock-base.yaml ]; then
 fi
 
 # Persist env vars for cron (cron does not inherit container env)
-env | grep -E '^(MAXMIND_|GEODB_|BLOCKED_COUNTRIES_FILE|BASE_CONFIG|MERGED_CONFIG)=' \
+env | grep -E '^(GEODB_|BLOCKED_COUNTRIES_FILE|BASE_CONFIG|MERGED_CONFIG)=' \
   > /etc/environment 2>/dev/null || true
 
 # Initial GeoIP refresh (generates /config/pipelock.yaml)
@@ -25,10 +25,10 @@ log "Running initial GeoIP refresh..."
   cp /config/pipelock-base.yaml /config/pipelock.yaml
 }
 
-# Start cron daemon (for weekly GeoIP refresh)
+# Start cron daemon (for monthly GeoIP refresh)
 if command -v cron >/dev/null 2>&1; then
   cron
-  log "Cron daemon started (weekly GeoIP refresh)"
+  log "Cron daemon started (monthly GeoIP refresh)"
 fi
 
 # Start Pipelock
