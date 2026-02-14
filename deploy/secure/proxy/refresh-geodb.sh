@@ -123,23 +123,21 @@ with open(cidrs_file, 'w') as f:
     for cidr in cidrs:
         f.write(cidr + '\n')
 
-# Merge into Pipelock config
+# Merge into Pipelock config (append to 'internal' SSRF block list)
 with open(base_path) as f:
     config = yaml.safe_load(f)
 
-if 'ssrf' not in config:
-    config['ssrf'] = {}
-if 'blockRanges' not in config['ssrf']:
-    config['ssrf']['blockRanges'] = []
+if 'internal' not in config:
+    config['internal'] = []
 
-existing = set(config['ssrf']['blockRanges'])
+existing = set(config['internal'])
 combined = sorted(existing | set(cidrs))
-config['ssrf']['blockRanges'] = combined
+config['internal'] = combined
 
 with open(out_path, 'w') as f:
     yaml.dump(config, f, default_flow_style=False, sort_keys=False, width=120)
 
-print(f'Merged config: {len(existing)} base + {len(cidrs)} geo = {len(combined)} total block ranges')
+print(f'Merged config: {len(existing)} base internal + {len(cidrs)} geo = {len(combined)} total internal ranges')
 " 2>&1 | while read -r line; do log "${line}"; done
 
 # ── Archive for audit trail ─────────────────────────────────────

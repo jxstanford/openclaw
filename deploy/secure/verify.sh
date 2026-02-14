@@ -103,13 +103,13 @@ else
   pass "Allowed domain accessible: api.anthropic.com"
 fi
 
-# Test GeoIP blocking (check if merged config has geo CIDRs)
+# Test GeoIP blocking (check if merged config has geo CIDRs in internal list)
 if docker compose exec pipelock test -f /config/pipelock.yaml 2>/dev/null; then
-  GEO_RANGES=$(docker compose exec pipelock grep -c "blockRanges" /config/pipelock.yaml 2>/dev/null || echo "0")
-  if [ "${GEO_RANGES}" -gt 0 ]; then
-    pass "GeoIP block ranges merged into Pipelock config"
+  INTERNAL_COUNT=$(docker compose exec pipelock grep -c "^- " /config/pipelock.yaml 2>/dev/null || echo "0")
+  if [ "${INTERNAL_COUNT}" -gt 20 ]; then
+    pass "GeoIP CIDRs merged into Pipelock internal list (${INTERNAL_COUNT} entries)"
   else
-    skip "GeoIP block ranges not present (MaxMind credentials may not be set)"
+    skip "GeoIP CIDRs not present (db-ip download may have failed)"
   fi
 else
   fail "Pipelock merged config not found at /config/pipelock.yaml"
