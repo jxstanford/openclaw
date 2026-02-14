@@ -1,0 +1,256 @@
+{
+  // Secure OpenClaw Gateway Configuration
+  // Three agent profiles: personal (full), work (scoped), public (locked)
+  // All sandboxed, egress via Pipelock proxy
+
+  // ── Gateway ──────────────────────────────────────────────────
+  gateway: {
+    mode: "local",
+    port: 18789,
+    bind: "lan",
+    controlUi: { enabled: true },
+    auth: {
+      mode: "token",
+      // Token injected via OPENCLAW_GATEWAY_TOKEN env var in docker-compose
+    },
+    reload: { mode: "hybrid", debounceMs: 300 },
+  },
+
+  // ── Logging ──────────────────────────────────────────────────
+  logging: {
+    level: "info",
+    consoleLevel: "info",
+    consoleStyle: "pretty",
+    redactSensitive: "tools",
+  },
+
+  // ── Agent Definitions ────────────────────────────────────────
+  agents: {
+    defaults: {
+      workspace: "/home/node/.openclaw/workspace",
+      model: {
+        primary: "anthropic/claude-sonnet-4-5",
+        fallbacks: ["anthropic/claude-opus-4-6"],
+      },
+      userTimezone: "America/Los_Angeles",
+      thinkingDefault: "low",
+      timeoutSeconds: 600,
+      maxConcurrent: 3,
+
+      // Default sandbox — all sessions sandboxed
+      sandbox: {
+        mode: "all",
+        scope: "agent",
+        docker: {
+          image: "openclaw-sandbox-common:bookworm-slim",
+          workdir: "/workspace",
+          readOnlyRoot: true,
+          tmpfs: ["/tmp", "/var/tmp", "/run"],
+          user: "1000:1000",
+          network: "none",
+          capDrop: ["ALL"],
+          pidsLimit: 256,
+          memory: "2g",
+        },
+        browser: { enabled: false },
+      },
+
+      // Default memory search — session transcript indexing enabled
+      memorySearch: {
+        enabled: true,
+        sources: ["memory", "sessions"],
+        experimental: { sessionMemory: true },
+        query: {
+          maxResults: 10,
+          hybrid: {
+            enabled: true,
+            vectorWeight: 0.7,
+            textWeight: 0.3,
+          },
+        },
+        sync: {
+          onSessionStart: true,
+          onSearch: true,
+          watch: true,
+          intervalMinutes: 60,
+        },
+      },
+    },
+
+    list: [
+      // ── Personal Agent ─────────────────────────────────────
+      // Full access, sandboxed with Pipelock egress.
+      // Primary daily-driver agent.
+      {
+        id: "personal",
+        default: true,
+        name: "Personal",
+        workspace: "/home/node/.openclaw/workspace",
+
+        sandbox: {
+          mode: "all",
+          workspaceAccess: "rw",
+          docker: {
+            image: "openclaw-sandbox-common:bookworm-slim",
+            readOnlyRoot: false,
+            network: "bridge",
+            env: {
+              HTTP_PROXY: "http://pipelock:8888",
+              HTTPS_PROXY: "http://pipelock:8888",
+              NO_PROXY: "localhost,127.0.0.1",
+            },
+            binds: [
+              "/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro",
+            ],
+          },
+          browser: {
+            enabled: true,
+            image: "openclaw-sandbox-browser:bookworm-slim",
+          },
+        },
+
+        tools: {
+          profile: "full",
+          elevated: {
+            enabled: true,
+            allowFrom: {
+              // Replace with your actual channel IDs
+              whatsapp: ["PERSONAL_WHATSAPP_NUMBER"],
+              telegram: ["PERSONAL_TELEGRAM_ID"],
+            },
+          },
+          exec: {
+            host: "sandbox",
+            security: "full",
+            timeoutSec: 1800,
+          },
+        },
+
+        memorySearch: {
+          enabled: true,
+          sources: ["memory", "sessions"],
+          experimental: { sessionMemory: true },
+          extraPaths: ["/shared-knowledge"],
+        },
+      },
+
+      // ── Work Agent ─────────────────────────────────────────
+      // Scoped workspace, restricted tools.
+      // Handles Slack/Teams context.
+      {
+        id: "work",
+        name: "Work",
+        workspace: "/home/node/.openclaw/workspace-work",
+
+        sandbox: {
+          mode: "all",
+          workspaceAccess: "rw",
+          docker: {
+            image: "openclaw-sandbox-common:bookworm-slim",
+            readOnlyRoot: false,
+            network: "bridge",
+            env: {
+              HTTP_PROXY: "http://pipelock:8888",
+              HTTPS_PROXY: "http://pipelock:8888",
+              NO_PROXY: "localhost,127.0.0.1",
+            },
+            binds: [
+              "/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro",
+            ],
+          },
+        },
+
+        tools: {
+          profile: "coding",
+          deny: ["browser", "canvas", "nodes", "cron", "gateway"],
+          exec: {
+            host: "sandbox",
+            security: "full",
+            timeoutSec: 1800,
+          },
+        },
+
+        memorySearch: {
+          enabled: true,
+          sources: ["memory", "sessions"],
+          experimental: { sessionMemory: true },
+          extraPaths: ["/shared-knowledge"],
+        },
+      },
+
+      // ── Public Agent ───────────────────────────────────────
+      // Maximum lockdown. Chat only, no tools, no network.
+      // Exposed to untrusted users (Discord).
+      {
+        id: "public",
+        name: "Public",
+        workspace: "/home/node/.openclaw/workspace-public",
+
+        identity: {
+          name: "Assistant",
+          theme: "helpful but cautious assistant",
+        },
+
+        sandbox: {
+          mode: "all",
+          workspaceAccess: "none",
+          docker: {
+            image: "openclaw-sandbox:bookworm-slim",
+            readOnlyRoot: true,
+            network: "none",
+            tmpfs: ["/tmp"],
+            pidsLimit: 64,
+            memory: "512m",
+          },
+        },
+
+        tools: {
+          deny: [
+            "exec", "process",
+            "read", "write", "edit", "apply_patch",
+            "browser", "canvas",
+            "nodes", "cron", "gateway",
+          ],
+          exec: {
+            security: "deny",
+          },
+        },
+
+        memorySearch: {
+          enabled: false,
+        },
+      },
+    ],
+  },
+
+  // ── Channel-to-Agent Bindings ────────────────────────────────
+  bindings: [
+    // Personal channels -> personal agent
+    { agentId: "personal", match: { channel: "whatsapp" } },
+    { agentId: "personal", match: { channel: "telegram" } },
+
+    // Work channels -> work agent
+    { agentId: "work", match: { channel: "slack" } },
+
+    // Public channels -> public agent
+    { agentId: "public", match: { channel: "discord" } },
+  ],
+
+  // ── Global Tool Settings ─────────────────────────────────────
+  tools: {
+    exec: {
+      host: "sandbox",
+      backgroundMs: 10000,
+      timeoutSec: 1800,
+      cleanupMs: 1800000,
+    },
+    elevated: {
+      enabled: true,
+      allowFrom: {
+        // Replace with your actual channel IDs
+        whatsapp: ["PERSONAL_WHATSAPP_NUMBER"],
+        telegram: ["PERSONAL_TELEGRAM_ID"],
+      },
+    },
+  },
+}

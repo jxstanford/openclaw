@@ -6,7 +6,8 @@
 #   host-access (external)              — gateway publishes ports to host
 #
 # Usage:
-#   cp .env.example .env   # fill in values
+#   cp .env.example .env                          # fill in values
+#   cp openclaw.example.json .openclaw/openclaw.json  # configure agents
 #   docker compose up -d
 
 services:
@@ -43,6 +44,13 @@ services:
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
+      # Per-agent workspace isolation
+      - ${OPENCLAW_WORKSPACE_WORK_DIR:-./.openclaw/workspace-work}:/home/node/.openclaw/workspace-work
+      - ${OPENCLAW_WORKSPACE_PUBLIC_DIR:-./.openclaw/workspace-public}:/home/node/.openclaw/workspace-public
+      # Cross-agent shared knowledge (read-only)
+      - ./.openclaw/shared-knowledge:/home/node/.openclaw/shared-knowledge:ro
+      # Docker socket for sandbox container spawning
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
@@ -59,7 +67,6 @@ services:
         "node",
         "openclaw.mjs",
         "gateway",
-        "--allow-unconfigured",
         "--bind",
         "${OPENCLAW_GATEWAY_BIND:-lan}",
         "--port",
@@ -80,6 +87,9 @@ services:
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
+      - ${OPENCLAW_WORKSPACE_WORK_DIR:-./.openclaw/workspace-work}:/home/node/.openclaw/workspace-work
+      - ${OPENCLAW_WORKSPACE_PUBLIC_DIR:-./.openclaw/workspace-public}:/home/node/.openclaw/workspace-public
+      - ./.openclaw/shared-knowledge:/home/node/.openclaw/shared-knowledge:ro
     networks:
       - proxy-net
     stdin_open: true
