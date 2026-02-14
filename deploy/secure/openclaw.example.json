@@ -2,18 +2,27 @@
   // Secure OpenClaw Gateway Configuration
   // Three agent profiles: personal (full), work (scoped), public (locked)
   // All sandboxed, egress via Pipelock proxy
+  // Hardened per Semgrep cheat sheet and OpenClaw security guide
 
   // ── Gateway ──────────────────────────────────────────────────
   gateway: {
     mode: "local",
     port: 18789,
     bind: "lan",
-    controlUi: { enabled: true },
+    controlUi: {
+      enabled: true,
+      allowInsecureAuth: false,
+    },
     auth: {
       mode: "token",
       // Token injected via OPENCLAW_GATEWAY_TOKEN env var in docker-compose
+      allowTailscale: true,
     },
     reload: { mode: "hybrid", debounceMs: 300 },
+    tailscale: {
+      mode: "serve",
+      resetOnExit: false,
+    },
   },
 
   // ── Logging ──────────────────────────────────────────────────
@@ -22,6 +31,28 @@
     consoleLevel: "info",
     consoleStyle: "pretty",
     redactSensitive: "tools",
+  },
+
+  // ── Session Security ─────────────────────────────────────────
+  session: {
+    dmScope: "per-channel-peer",
+    reset: {
+      mode: "daily",
+      atHour: 4,
+      idleMinutes: 60,
+    },
+  },
+
+  // ── Skills ───────────────────────────────────────────────────
+  skills: {
+    load: {
+      extraDirs: ["/home/node/.openclaw/skills"],
+    },
+  },
+
+  // ── Cron (ClawSec scheduled tasks) ───────────────────────────
+  cron: {
+    enabled: true,
   },
 
   // ── Agent Definitions ────────────────────────────────────────
@@ -86,6 +117,7 @@
         default: true,
         name: "Personal",
         workspace: "/home/node/.openclaw/workspace",
+        skills: ["clawsec-suite"],
 
         sandbox: {
           mode: "all",
@@ -141,6 +173,7 @@
         id: "work",
         name: "Work",
         workspace: "/home/node/.openclaw/workspace-work",
+        skills: ["clawsec-suite"],
 
         sandbox: {
           mode: "all",
@@ -185,6 +218,7 @@
         id: "public",
         name: "Public",
         workspace: "/home/node/.openclaw/workspace-public",
+        skills: ["clawsec-suite"],
 
         identity: {
           name: "Assistant",
@@ -235,6 +269,41 @@
     // Public channels -> public agent
     { agentId: "public", match: { channel: "discord" } },
   ],
+
+  // ── Channel Security ─────────────────────────────────────────
+  channels: {
+    whatsapp: {
+      dmPolicy: "pairing",
+      allowFrom: ["PERSONAL_WHATSAPP_NUMBER"],
+      groupPolicy: "allowlist",
+      groupAllowFrom: ["PERSONAL_WHATSAPP_NUMBER"],
+      groups: { "*": { requireMention: true } },
+    },
+    telegram: {
+      enabled: true,
+      allowFrom: ["PERSONAL_TELEGRAM_ID"],
+      groupPolicy: "allowlist",
+      groupAllowFrom: ["PERSONAL_TELEGRAM_ID"],
+      groups: { "*": { requireMention: true } },
+    },
+    discord: {
+      enabled: true,
+      dm: { enabled: false },
+      // Configure guild IDs for public agent
+      guilds: {
+        DISCORD_GUILD_ID: {
+          requireMention: true,
+        },
+      },
+    },
+    slack: {
+      enabled: true,
+      dm: { enabled: true, allowFrom: ["SLACK_USER_ID"] },
+      channels: {
+        // Add allowed channels
+      },
+    },
+  },
 
   // ── Global Tool Settings ─────────────────────────────────────
   tools: {

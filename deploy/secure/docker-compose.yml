@@ -37,6 +37,8 @@ services:
       HOME: /home/node
       TERM: xterm-256color
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      # Disable mDNS broadcasting (security hardening)
+      OPENCLAW_DISABLE_BONJOUR: "1"
       # Route sandbox HTTP through Pipelock
       HTTP_PROXY: http://pipelock:8888
       HTTPS_PROXY: http://pipelock:8888
@@ -49,6 +51,8 @@ services:
       - ${OPENCLAW_WORKSPACE_PUBLIC_DIR:-./.openclaw/workspace-public}:/home/node/.openclaw/workspace-public
       # Cross-agent shared knowledge (read-only)
       - ./.openclaw/shared-knowledge:/home/node/.openclaw/shared-knowledge:ro
+      # ClawSec and custom skills
+      - ./skills:/home/node/.openclaw/skills:ro
       # Docker socket for sandbox container spawning
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
