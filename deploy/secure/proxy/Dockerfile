@@ -1,9 +1,11 @@
-# Pipelock + GeoIP egress proxy.
-# Extends the stock Pipelock image with db-ip Lite country
-# CIDR extraction and monthly refresh via cron.
+# Pipelock egress proxy with GeoIP blocking + threat intelligence feeds.
+# Extends the stock Pipelock image with:
+#   - db-ip Lite country CIDR extraction (monthly refresh)
+#   - Threat intelligence feed aggregation (daily refresh)
 #
-# Data source: https://db-ip.com/db/download/ip-to-country-lite
-# License: CC BY 4.0 — no account or API key required.
+# Data sources:
+#   GeoIP:  https://db-ip.com/db/download/ip-to-country-lite (CC BY 4.0)
+#   Threats: HaGeZi TIF Medium, urlhaus-filter, phishing-filter
 
 FROM ghcr.io/luckypipewrench/pipelock:latest AS pipelock-bin
 
@@ -21,9 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=pipelock-bin /pipelock /pipelock
 
 # Copy refresh tooling
-COPY refresh-geodb.sh /usr/local/bin/refresh-geodb
-COPY entrypoint.sh    /usr/local/bin/entrypoint
-RUN chmod +x /usr/local/bin/refresh-geodb /usr/local/bin/entrypoint
+COPY refresh-geodb.sh    /usr/local/bin/refresh-geodb
+COPY refresh-threats.sh  /usr/local/bin/refresh-threats
+COPY entrypoint.sh       /usr/local/bin/entrypoint
+RUN chmod +x /usr/local/bin/refresh-geodb /usr/local/bin/refresh-threats /usr/local/bin/entrypoint
 
 # Default blocked-countries list (can be overridden via bind mount)
 COPY geo-blocked-countries.conf /etc/geogate/blocked-countries.conf
@@ -33,8 +36,8 @@ COPY geo-blocked-countries.conf /etc/geogate/blocked-countries.conf
 COPY crontab /etc/cron.d/geodb-refresh
 RUN chmod 0644 /etc/cron.d/geodb-refresh && crontab /etc/cron.d/geodb-refresh
 
-# Directories for GeoIP data and config
-RUN mkdir -p /var/lib/geogate /config
+# Directories for GeoIP data, threat feeds, and config
+RUN mkdir -p /var/lib/geogate /var/lib/threatfeeds /config
 
 EXPOSE 8888
 

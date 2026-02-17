@@ -11,7 +11,10 @@
     bind: "lan",
     controlUi: {
       enabled: true,
-      allowInsecureAuth: false,
+      // Device pairing requires WebCrypto (HTTPS). Docker port mapping serves
+      // HTTP, so device identity cannot work. Token auth still protects access.
+      // Set to false once Tailscale Serve provides HTTPS.
+      allowInsecureAuth: true,
     },
     auth: {
       mode: "token",
@@ -261,6 +264,7 @@
     // Personal channels -> personal agent
     { agentId: "personal", match: { channel: "whatsapp" } },
     { agentId: "personal", match: { channel: "telegram" } },
+    { agentId: "personal", match: { channel: "signal" } },
 
     // Work channels -> work agent
     { agentId: "work", match: { channel: "slack" } },
@@ -297,10 +301,21 @@
     },
     slack: {
       enabled: true,
+      mode: "socket",
       dm: { enabled: true, allowFrom: ["SLACK_USER_ID"] },
       channels: {
         // Add allowed channels
       },
+    },
+    // Signal via external signal-cli daemon (Docker container)
+    signal: {
+      enabled: true,
+      httpUrl: "http://signal-cli:8080",
+      autoStart: false,
+      dmPolicy: "pairing",
+      groupPolicy: "allowlist",
+      sendReadReceipts: true,
+      groups: { "*": { requireMention: true } },
     },
   },
 

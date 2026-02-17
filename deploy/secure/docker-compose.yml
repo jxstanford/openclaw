@@ -20,6 +20,7 @@ services:
       - ./pipelock.yaml:/config/pipelock-base.yaml:ro
       - ./proxy/geo-blocked-countries.conf:/etc/geogate/blocked-countries.conf:ro
       - pipelock-geodb:/var/lib/geogate
+      - pipelock-threats:/var/lib/threatfeeds
     networks:
       proxy-net:
         aliases:
@@ -36,6 +37,9 @@ services:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       # Disable mDNS broadcasting (security hardening)
       OPENCLAW_DISABLE_BONJOUR: "1"
+      # Slack Socket Mode tokens
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
       # Route sandbox HTTP through Pipelock
       HTTP_PROXY: http://pipelock:8888
       HTTPS_PROXY: http://pipelock:8888
@@ -73,6 +77,28 @@ services:
         "--port",
         "18789",
       ]
+
+  # ── signal-cli daemon ─────────────────────────────────────────────
+  # Java-based signal-cli under Rosetta on Apple Silicon.
+  # JSON-RPC API on port 8080 (proxy-net only).
+  signal-cli:
+    platform: linux/amd64
+    build:
+      context: ./signal
+      dockerfile: Dockerfile
+    environment:
+      SIGNAL_ACCOUNT: ${SIGNAL_ACCOUNT:-}
+      SIGNAL_MODE: ${SIGNAL_MODE:-daemon}
+      SIGNAL_CLI_DATA: /data
+    volumes:
+      - ./.signal-data:/data
+    networks:
+      proxy-net:
+        aliases:
+          - signal-cli
+      # Direct egress for Signal Protocol (E2E encrypted, no proxy needed)
+      egress: {}
+    restart: unless-stopped
 
   # ── OpenClaw CLI (interactive) ─────────────────────────────────────
   openclaw-cli:
@@ -118,5 +144,9 @@ networks:
     driver: bridge
 
 volumes:
-  # Persists MaxMind GeoIP data and archive across container restarts
+  # Persists GeoIP data and archive across container restarts
   pipelock-geodb:
+
+  # Persists threat feed cache and archive across container restarts
+  pipelock-threats:
+

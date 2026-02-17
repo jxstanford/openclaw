@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pipelock + GeoIP entrypoint.
+# Pipelock + GeoIP + threat feeds entrypoint.
 # 1. Run initial GeoIP refresh (merges country CIDRs into Pipelock config)
-# 2. Start cron for monthly refresh
-# 3. Start Pipelock with merged config
+# 2. Run initial threat feed refresh (merges blocklist domains into config)
+# 3. Start cron for scheduled refresh (monthly GeoIP, daily threats)
+# 4. Start Pipelock with merged config
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] entrypoint: $*"; }
 
@@ -15,7 +16,7 @@ if [ ! -f /config/pipelock-base.yaml ]; then
 fi
 
 # Persist env vars for cron (cron does not inherit container env)
-env | grep -E '^(GEODB_|BLOCKED_COUNTRIES_FILE|BASE_CONFIG|MERGED_CONFIG)=' \
+env | grep -E '^(GEODB_|BLOCKED_COUNTRIES_FILE|BASE_CONFIG|MERGED_CONFIG|THREATS_)=' \
   > /etc/environment 2>/dev/null || true
 
 # Initial GeoIP refresh (generates /config/pipelock.yaml)
@@ -25,10 +26,16 @@ log "Running initial GeoIP refresh..."
   cp /config/pipelock-base.yaml /config/pipelock.yaml
 }
 
-# Start cron daemon (for monthly GeoIP refresh)
+# Initial threat feed refresh (expands blocklist in merged config)
+log "Running initial threat feed refresh..."
+/usr/local/bin/refresh-threats || {
+  log "WARN: Threat feed refresh failed — continuing with base blocklist"
+}
+
+# Start cron daemon (monthly GeoIP + daily threat feeds)
 if command -v cron >/dev/null 2>&1; then
   cron
-  log "Cron daemon started (monthly GeoIP refresh)"
+  log "Cron daemon started (monthly GeoIP, daily threat feeds)"
 fi
 
 # Start Pipelock

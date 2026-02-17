@@ -115,6 +115,20 @@ else
   fail "Pipelock merged config not found at /config/pipelock.yaml"
 fi
 
+# Test threat intelligence feeds (blocklist should be >100 if feeds loaded)
+BLOCKLIST_COUNT=$(docker compose exec pipelock python3 -c "
+import yaml
+with open('/config/pipelock.yaml') as f:
+    c = yaml.safe_load(f)
+print(len(c.get('fetch_proxy', {}).get('monitoring', {}).get('blocklist', [])))
+" 2>/dev/null || echo "0")
+
+if [ "${BLOCKLIST_COUNT}" -gt 100 ]; then
+  pass "Threat intelligence feeds merged into blocklist (${BLOCKLIST_COUNT} entries)"
+else
+  skip "Threat feeds not loaded — blocklist has ${BLOCKLIST_COUNT} entries (hand-curated only)"
+fi
+
 echo ""
 
 # ── Layer 2: Docker Sandbox Isolation ───────────────────────────
