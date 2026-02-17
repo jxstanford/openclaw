@@ -43,7 +43,7 @@ services:
       # Route sandbox HTTP through Pipelock
       HTTP_PROXY: http://pipelock:8888
       HTTPS_PROXY: http://pipelock:8888
-      NO_PROXY: localhost,127.0.0.1
+      NO_PROXY: localhost,127.0.0.1,signal-cli
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
@@ -110,7 +110,7 @@ services:
       BROWSER: echo
       HTTP_PROXY: http://pipelock:8888
       HTTPS_PROXY: http://pipelock:8888
-      NO_PROXY: localhost,127.0.0.1
+      NO_PROXY: localhost,127.0.0.1,signal-cli
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
@@ -149,4 +149,3 @@ volumes:
 
   # Persists threat feed cache and archive across container restarts
   pipelock-threats:
-

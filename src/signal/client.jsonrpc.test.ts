@@ -1,147 +1,166 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WebSocketServer } from "ws";
-import {
-	detectSignalApiMode,
-	type SignalSseEvent,
-	streamSignalJsonRpc,
-} from "./client.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { detectSignalApiMode, pollSignalJsonRpc, type SignalSseEvent } from "./client.js";
 
 // ---------- detectSignalApiMode tests (mock fetch) ----------
 
 const fetchMock = vi.fn();
 vi.mock("../infra/fetch.js", () => ({
-	resolveFetch: () => fetchMock,
+  resolveFetch: () => fetchMock,
+}));
+
+vi.mock("../utils/fetch-timeout.js", () => ({
+  fetchWithTimeout: (url: string, init: RequestInit, _timeout: number, fetchImpl: typeof fetch) =>
+    fetchImpl(url, init),
 }));
 
 describe("detectSignalApiMode", () => {
-	beforeEach(() => {
-		fetchMock.mockReset();
-	});
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
 
-	it('returns "sse" when /api/v1/events responds 200', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: true,
-			body: { cancel: vi.fn() },
-		});
-		const mode = await detectSignalApiMode("http://localhost:8080");
-		expect(mode).toBe("sse");
-	});
+  it('returns "sse" when /api/v1/events responds 200', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: { cancel: vi.fn() },
+    });
+    const mode = await detectSignalApiMode("http://localhost:8080");
+    expect(mode).toBe("sse");
+  });
 
-	it('returns "jsonrpc" when /api/v1/events responds 404', async () => {
-		fetchMock.mockResolvedValueOnce({
-			ok: false,
-			status: 404,
-			body: null,
-		});
-		const mode = await detectSignalApiMode("http://localhost:8080");
-		expect(mode).toBe("jsonrpc");
-	});
+  it('returns "jsonrpc" when /api/v1/events responds 404', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      body: null,
+    });
+    const mode = await detectSignalApiMode("http://localhost:8080");
+    expect(mode).toBe("jsonrpc");
+  });
 
-	it('returns "jsonrpc" when fetch throws (connection refused)', async () => {
-		fetchMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
-		const mode = await detectSignalApiMode("http://localhost:8080");
-		expect(mode).toBe("jsonrpc");
-	});
+  it('returns "jsonrpc" when fetch throws (connection refused)', async () => {
+    fetchMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    const mode = await detectSignalApiMode("http://localhost:8080");
+    expect(mode).toBe("jsonrpc");
+  });
 });
 
-// ---------- streamSignalJsonRpc tests (real WebSocket server) ----------
+// ---------- pollSignalJsonRpc tests (mock fetch) ----------
 
-describe("streamSignalJsonRpc", () => {
-	let wss: WebSocketServer;
-	let port: number;
+describe("pollSignalJsonRpc", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
 
-	beforeEach(async () => {
-		wss = new WebSocketServer({ port: 0 });
-		const addr = wss.address();
-		port = typeof addr === "object" && addr ? addr.port : 0;
-	});
+  it("converts receive results into SignalSseEvents", async () => {
+    const events: SignalSseEvent[] = [];
+    const envelope = {
+      sourceNumber: "+15550001111",
+      dataMessage: { message: "hello" },
+    };
 
-	afterEach(() => {
-		wss.close();
-	});
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            result: [{ envelope }],
+            id: "1",
+          }),
+        ),
+    });
 
-	it("converts JSON-RPC receive notifications to SignalSseEvent", async () => {
-		const events: SignalSseEvent[] = [];
+    await pollSignalJsonRpc({
+      baseUrl: "http://localhost:8080",
+      onEvent: (event) => events.push(event),
+      pollTimeoutSec: 1,
+    });
 
-		wss.on("connection", (ws) => {
-			ws.send(
-				JSON.stringify({
-					jsonrpc: "2.0",
-					method: "receive",
-					params: {
-						envelope: {
-							sourceNumber: "+15550001111",
-							dataMessage: { message: "hello" },
-						},
-					},
-				}),
-			);
-			// Close after sending so the stream ends
-			setTimeout(() => ws.close(), 50);
-		});
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe("receive");
+    const data = JSON.parse(events[0].data!);
+    expect(data.envelope.sourceNumber).toBe("+15550001111");
+    expect(data.envelope.dataMessage.message).toBe("hello");
+  });
 
-		await streamSignalJsonRpc({
-			baseUrl: `http://127.0.0.1:${port}`,
-			onEvent: (event) => events.push(event),
-		});
+  it("emits nothing when receive returns empty array", async () => {
+    const events: SignalSseEvent[] = [];
 
-		expect(events).toHaveLength(1);
-		expect(events[0].event).toBe("receive");
-		const data = JSON.parse(events[0].data!);
-		expect(data.envelope.sourceNumber).toBe("+15550001111");
-		expect(data.envelope.dataMessage.message).toBe("hello");
-	});
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify({ jsonrpc: "2.0", result: [], id: "1" })),
+    });
 
-	it("ignores non-receive JSON-RPC messages", async () => {
-		const events: SignalSseEvent[] = [];
+    await pollSignalJsonRpc({
+      baseUrl: "http://localhost:8080",
+      onEvent: (event) => events.push(event),
+      pollTimeoutSec: 1,
+    });
 
-		wss.on("connection", (ws) => {
-			// A response to a request (has id, no method)
-			ws.send(
-				JSON.stringify({
-					jsonrpc: "2.0",
-					result: { version: "0.13" },
-					id: "1",
-				}),
-			);
-			// A different method
-			ws.send(
-				JSON.stringify({ jsonrpc: "2.0", method: "version", params: {} }),
-			);
-			setTimeout(() => ws.close(), 50);
-		});
+    expect(events).toHaveLength(0);
+  });
 
-		await streamSignalJsonRpc({
-			baseUrl: `http://127.0.0.1:${port}`,
-			onEvent: (event) => events.push(event),
-		});
+  it("emits multiple events for batch results", async () => {
+    const events: SignalSseEvent[] = [];
 
-		expect(events).toHaveLength(0);
-	});
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            result: [
+              { envelope: { sourceNumber: "+1111" } },
+              { envelope: { sourceNumber: "+2222" } },
+            ],
+            id: "1",
+          }),
+        ),
+    });
 
-	it("resolves when server closes connection", async () => {
-		wss.on("connection", (ws) => {
-			ws.close();
-		});
+    await pollSignalJsonRpc({
+      baseUrl: "http://localhost:8080",
+      onEvent: (event) => events.push(event),
+      pollTimeoutSec: 1,
+    });
 
-		await expect(
-			streamSignalJsonRpc({
-				baseUrl: `http://127.0.0.1:${port}`,
-				onEvent: () => {},
-			}),
-		).resolves.toBeUndefined();
-	});
+    expect(events).toHaveLength(2);
+  });
 
-	it("resolves immediately when abortSignal is already aborted", async () => {
-		const controller = new AbortController();
-		controller.abort();
+  it("returns immediately when abortSignal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
 
-		await expect(
-			streamSignalJsonRpc({
-				baseUrl: `http://127.0.0.1:${port}`,
-				abortSignal: controller.signal,
-				onEvent: () => {},
-			}),
-		).resolves.toBeUndefined();
-	});
+    await expect(
+      pollSignalJsonRpc({
+        baseUrl: "http://localhost:8080",
+        abortSignal: controller.signal,
+        onEvent: () => {},
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("passes account parameter to RPC request", async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify({ jsonrpc: "2.0", result: [], id: "1" })),
+    });
+
+    await pollSignalJsonRpc({
+      baseUrl: "http://localhost:8080",
+      account: "+15551234567",
+      onEvent: () => {},
+      pollTimeoutSec: 1,
+    });
+
+    const callBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(callBody.params.account).toBe("+15551234567");
+    expect(callBody.params.timeout).toBe(1);
+  });
 });

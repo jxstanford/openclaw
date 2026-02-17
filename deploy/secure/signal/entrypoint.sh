@@ -35,7 +35,7 @@ case "${MODE}" in
       daemon \
       --http "${HOST}:${PORT}" \
       --no-receive-stdout \
-      --receive-mode on-start \
+      --receive-mode manual \
       --send-read-receipts
     ;;
 
