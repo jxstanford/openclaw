@@ -40,10 +40,11 @@ services:
       # Slack Socket Mode tokens
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
-      # Route sandbox HTTP through Pipelock
-      HTTP_PROXY: http://pipelock:8888
-      HTTPS_PROXY: http://pipelock:8888
-      NO_PROXY: localhost,127.0.0.1,signal-cli
+      # AI model API key
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # NOTE: HTTP_PROXY/HTTPS_PROXY not set on gateway — the gateway talks
+      # to Pipelock's fetch API (:8888) directly, not via CONNECT proxy.
+      # Sandbox containers use Squid (:3128) via proxy-net for CONNECT tunnels.
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
@@ -56,12 +57,19 @@ services:
       - ./skills:/home/node/.openclaw/skills:ro
       # Docker socket for sandbox container spawning
       - /var/run/docker.sock:/var/run/docker.sock
+    # Disable SELinux labeling so the socket mount is accessible (Podman/Fedora)
+    security_opt:
+      - label:disable
+    # Grant node user access to the Docker/Podman socket (GID 0 inside VM)
+    group_add:
+      - "0"
     ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18790}:18790"
     networks:
       - proxy-net
       - host-access
+      - egress
     init: true
     restart: unless-stopped
     depends_on:
@@ -108,9 +116,6 @@ services:
       TERM: xterm-256color
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       BROWSER: echo
-      HTTP_PROXY: http://pipelock:8888
-      HTTPS_PROXY: http://pipelock:8888
-      NO_PROXY: localhost,127.0.0.1,signal-cli
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-./.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-./.openclaw/workspace}:/home/node/.openclaw/workspace
@@ -131,7 +136,9 @@ services:
 
 networks:
   # Internal network — agents cannot reach the internet directly.
+  # Fixed name so sandbox containers can join by name (--network proxy-net).
   proxy-net:
+    name: proxy-net
     internal: true
 
   # External network — only Pipelock is attached.

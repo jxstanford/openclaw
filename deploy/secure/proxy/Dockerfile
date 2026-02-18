@@ -11,22 +11,32 @@ FROM ghcr.io/luckypipewrench/pipelock:latest AS pipelock-bin
 
 FROM debian:bookworm-slim
 
-# Install runtime dependencies for refresh-geodb
+# Install runtime dependencies for refresh-geodb + Squid CONNECT proxy
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       cron \
       curl \
       python3-yaml \
+      squid \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Pipelock binary from official image
 COPY --from=pipelock-bin /pipelock /pipelock
 
-# Copy refresh tooling
-COPY refresh-geodb.sh    /usr/local/bin/refresh-geodb
-COPY refresh-threats.sh  /usr/local/bin/refresh-threats
-COPY entrypoint.sh       /usr/local/bin/entrypoint
-RUN chmod +x /usr/local/bin/refresh-geodb /usr/local/bin/refresh-threats /usr/local/bin/entrypoint
+# Copy refresh tooling and Squid ACL generator
+COPY refresh-geodb.sh         /usr/local/bin/refresh-geodb
+COPY refresh-threats.sh       /usr/local/bin/refresh-threats
+COPY generate-squid-acls.sh   /usr/local/bin/generate-squid-acls
+COPY entrypoint.sh            /usr/local/bin/entrypoint
+RUN chmod +x /usr/local/bin/refresh-geodb /usr/local/bin/refresh-threats \
+             /usr/local/bin/generate-squid-acls /usr/local/bin/entrypoint
+
+# Squid configuration and ACL directory
+COPY squid.conf /etc/squid/squid.conf
+RUN mkdir -p /etc/squid /var/spool/squid \
+    && touch /etc/squid/acl-allowed-domains.txt \
+             /etc/squid/acl-blocked-domains.txt \
+             /etc/squid/acl-blocked-cidrs.txt
 
 # Default blocked-countries list (can be overridden via bind mount)
 COPY geo-blocked-countries.conf /etc/geogate/blocked-countries.conf
@@ -39,9 +49,9 @@ RUN chmod 0644 /etc/cron.d/geodb-refresh && crontab /etc/cron.d/geodb-refresh
 # Directories for GeoIP data, threat feeds, and config
 RUN mkdir -p /var/lib/geogate /var/lib/threatfeeds /config
 
-EXPOSE 8888
+EXPOSE 8888 3128
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
-  CMD ["/pipelock", "healthcheck", "--addr", "127.0.0.1:8888"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
+  CMD /pipelock healthcheck --addr 127.0.0.1:8888 && squid -k check
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]

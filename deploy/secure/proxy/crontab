@@ -1,7 +1,9 @@
 # GeoIP refresh — 2nd of each month at 03:00 UTC.
 # db-ip publishes on the 1st; we wait a day for propagation.
 # /etc/environment is populated by entrypoint with container env vars.
-0 3 2 * * root . /etc/environment; /usr/local/bin/refresh-geodb >> /var/log/geodb-refresh.log 2>&1
+# After refresh, regenerate Squid ACLs and hot-reload.
+0 3 2 * * root . /etc/environment; /usr/local/bin/refresh-geodb >> /var/log/geodb-refresh.log 2>&1 && /usr/local/bin/generate-squid-acls >> /var/log/geodb-refresh.log 2>&1 && squid -k reconfigure >> /var/log/geodb-refresh.log 2>&1
 
 # Threat intelligence feed refresh — daily at 04:00 UTC.
-0 4 * * * root . /etc/environment; /usr/local/bin/refresh-threats >> /var/log/threats-refresh.log 2>&1
+# After refresh, regenerate Squid ACLs and hot-reload.
+0 4 * * * root . /etc/environment; /usr/local/bin/refresh-threats >> /var/log/threats-refresh.log 2>&1 && /usr/local/bin/generate-squid-acls >> /var/log/threats-refresh.log 2>&1 && squid -k reconfigure >> /var/log/threats-refresh.log 2>&1

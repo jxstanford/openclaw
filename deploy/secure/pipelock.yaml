@@ -83,19 +83,19 @@ dlp:
       regex: 'sk-proj-[a-zA-Z0-9\-_]{20,}'
       severity: critical
     - name: "GitHub Token"
-      regex: 'gh[ps]_[A-Za-z0-9_]{36,}'
+      regex: "gh[ps]_[A-Za-z0-9_]{36,}"
       severity: critical
     - name: "Slack Token"
-      regex: 'xox[bpras]-[0-9a-zA-Z-]{15,}'
+      regex: "xox[bpras]-[0-9a-zA-Z-]{15,}"
       severity: critical
     - name: "Discord Bot Token"
       regex: '[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}'
       severity: critical
     - name: "AWS Access Key"
-      regex: 'AKIA[0-9A-Z]{16}'
+      regex: "AKIA[0-9A-Z]{16}"
       severity: critical
     - name: "Stripe Key"
-      regex: '[sr]k_(live|test)_[a-zA-Z0-9]{20,}'
+      regex: "[sr]k_(live|test)_[a-zA-Z0-9]{20,}"
       severity: critical
     - name: "Private Key Block"
       regex: '-----BEGIN\s+(RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----'
