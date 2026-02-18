@@ -36,6 +36,8 @@ export type SandboxDockerSettings = {
   seccompProfile?: string;
   /** AppArmor profile name. */
   apparmorProfile?: string;
+  /** Extra --security-opt flags (e.g. ["label:disable"] for SELinux). */
+  securityOpt?: string[];
   /** DNS servers (e.g. ["1.1.1.1", "8.8.8.8"]). */
   dns?: string[];
   /** Extra host mappings (e.g. ["api.local:10.0.0.2"]). */

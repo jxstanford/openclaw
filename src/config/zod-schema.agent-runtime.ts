@@ -121,6 +121,7 @@ export const SandboxDockerSchema = z
       .optional(),
     seccompProfile: z.string().optional(),
     apparmorProfile: z.string().optional(),
+    securityOpt: z.array(z.string()).optional(),
     dns: z.array(z.string()).optional(),
     extraHosts: z.array(z.string()).optional(),
     binds: z.array(z.string()).optional(),

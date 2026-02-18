@@ -285,6 +285,9 @@ export function buildSandboxCreateArgs(params: {
   if (params.cfg.apparmorProfile) {
     args.push("--security-opt", `apparmor=${params.cfg.apparmorProfile}`);
   }
+  for (const opt of params.cfg.securityOpt ?? []) {
+    args.push("--security-opt", opt);
+  }
   for (const entry of params.cfg.dns ?? []) {
     if (entry.trim()) {
       args.push("--dns", entry);
@@ -419,7 +422,10 @@ export async function ensureSandboxContainer(params: {
         running &&
         (typeof lastUsedAtMs !== "number" || now - lastUsedAtMs < HOT_CONTAINER_WINDOW_MS);
       if (isHot) {
-        const hint = formatSandboxRecreateHint({ scope: params.cfg.scope, sessionKey: scopeKey });
+        const hint = formatSandboxRecreateHint({
+          scope: params.cfg.scope,
+          sessionKey: scopeKey,
+        });
         defaultRuntime.log(
           `Sandbox config changed for ${containerName} (recently used). Recreate to apply: ${hint}`,
         );

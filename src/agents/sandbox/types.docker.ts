@@ -16,6 +16,7 @@ export type SandboxDockerConfig = {
   ulimits?: Record<string, string | number | { soft?: number; hard?: number }>;
   seccompProfile?: string;
   apparmorProfile?: string;
+  securityOpt?: string[];
   dns?: string[];
   extraHosts?: string[];
   binds?: string[];
