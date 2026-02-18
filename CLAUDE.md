@@ -10,30 +10,30 @@ OpenClaw is a personal AI assistant gateway. It runs on your devices and routes 
 
 ## Build & Development Commands
 
-| Task | Command |
-|------|---------|
-| Install deps | `pnpm install` |
-| Build | `pnpm build` |
-| Full check (format + types + lint) | `pnpm check` |
-| Format fix | `pnpm format` |
-| Lint | `pnpm lint` |
-| Lint + auto-fix | `pnpm lint:fix` |
-| Type-check | `pnpm tsgo` |
-| Run CLI (dev) | `pnpm openclaw ...` or `pnpm dev` |
-| Gateway (dev) | `pnpm gateway:dev` |
-| UI (dev) | `pnpm ui:dev` |
+| Task                               | Command                           |
+| ---------------------------------- | --------------------------------- |
+| Install deps                       | `pnpm install`                    |
+| Build                              | `pnpm build`                      |
+| Full check (format + types + lint) | `pnpm check`                      |
+| Format fix                         | `pnpm format`                     |
+| Lint                               | `pnpm lint`                       |
+| Lint + auto-fix                    | `pnpm lint:fix`                   |
+| Type-check                         | `pnpm tsgo`                       |
+| Run CLI (dev)                      | `pnpm openclaw ...` or `pnpm dev` |
+| Gateway (dev)                      | `pnpm gateway:dev`                |
+| UI (dev)                           | `pnpm ui:dev`                     |
 
 ## Testing
 
-| Task | Command |
-|------|---------|
-| All tests (parallel) | `pnpm test` |
-| Unit tests only (fast) | `pnpm test:fast` |
-| Watch mode | `pnpm test:watch` |
-| Single test file | `pnpm test -- <pattern>` (e.g. `pnpm test -- auth-health`) |
-| E2E tests | `pnpm test:e2e` |
-| Live tests (real APIs) | `OPENCLAW_LIVE_TEST=1 pnpm test:live` |
-| Coverage | `pnpm test:coverage` |
+| Task                   | Command                                                    |
+| ---------------------- | ---------------------------------------------------------- |
+| All tests (parallel)   | `pnpm test`                                                |
+| Unit tests only (fast) | `pnpm test:fast`                                           |
+| Watch mode             | `pnpm test:watch`                                          |
+| Single test file       | `pnpm test -- <pattern>` (e.g. `pnpm test -- auth-health`) |
+| E2E tests              | `pnpm test:e2e`                                            |
+| Live tests (real APIs) | `OPENCLAW_LIVE_TEST=1 pnpm test:live`                      |
+| Coverage               | `pnpm test:coverage`                                       |
 
 - Framework: Vitest with fork pool, 120s timeout, V8 coverage (70% thresholds)
 - Tests are colocated: `src/foo.ts` → `src/foo.test.ts`, E2E in `*.e2e.test.ts`, live in `*.live.test.ts`
@@ -95,6 +95,7 @@ OpenClaw is a personal AI assistant gateway. It runs on your devices and routes 
 ## Extension Development
 
 Extensions live in `extensions/<name>/` as pnpm workspace packages:
+
 - Export a `ChannelPlugin` interface implementation
 - `package.json` must include `"openclaw": { "extensions": ["./index.ts"] }`
 - Runtime deps in `dependencies` (plugin install runs `npm install --omit=dev`)
