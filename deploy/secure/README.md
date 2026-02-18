@@ -25,34 +25,46 @@ bash verify.sh                                 # validate all layers
 └─────────┘      └────────┬─────────┘      └──────────┬──────────┘
                           │                            │
                           ▼                            ▼
-                 ┌─────────────────┐          ┌────────────────┐
-                 │    Pipelock     │          │   Pipelock     │
-                 │  (egress proxy) │          │ (egress proxy) │
-                 │  L1: DLP, SSRF  │          │ L1: DLP, SSRF  │
-                 │  blocklist, geo │          │ blocklist, geo │
-                 └────────┬────────┘          └───────┬────────┘
-                          │                           │
-                          ▼                           ▼
-                      Internet                    Internet
+                 ┌──────────────────────────────────────────────┐
+                 │          proxy container (pipelock)          │
+                 │                                              │
+                 │  Squid (:3128)    ← sandbox CONNECT tunnels  │
+                 │  Pipelock (:8888) ← gateway fetch-as-service │
+                 │                                              │
+                 │  Shared blocking: GeoIP, threat feeds, SSRF  │
+                 └──────────────────┬───────────────────────────┘
+                                    │
+                                    ▼
+                                Internet
 ```
 
-All outbound traffic from both the gateway and sandboxes routes through
-Pipelock. The gateway serves the Control UI and WebSocket API, protected
-by token auth and optionally Tailscale identity.
+All outbound traffic routes through the proxy container. Sandbox containers
+use Squid (port 3128) for standard HTTPS CONNECT tunnels. Pipelock (port 8888)
+handles fetch-as-a-service requests with DLP and prompt-injection scanning.
+Both share the same blocking data (GeoIP CIDRs, threat feed domains, SSRF ranges).
+The gateway serves the Control UI and WebSocket API, protected by token auth and
+optionally Tailscale identity.
 
 ## Security Layers
 
-### Layer 1 -- Pipelock Egress Proxy
+### Layer 1 -- Egress Proxy (Squid + Pipelock)
 
-All outbound HTTP from the gateway routes through Pipelock, which enforces
-domain blocklists (blocks known malware/tracking domains), DLP patterns
-(prevents accidental leakage of API keys, tokens, credentials in requests),
-SSRF protection (blocks requests to private/internal IP ranges), GeoIP
-country-level blocking (denies traffic to sanctioned countries like NK, Iran,
-Cuba, Syria), and automated threat intelligence feeds (daily-refreshed
-blocklists from community-maintained threat databases).
+All outbound traffic routes through a dual-proxy container:
 
-**Config:** `pipelock.yaml`, `proxy/geo-blocked-countries.conf`
+- **Squid** (port 3128) handles HTTPS CONNECT tunnels from sandbox containers.
+  Enforces domain-level and CIDR-level blocking via ACL files generated from
+  Pipelock's merged config. No TLS bumping (CONNECT traffic is opaque).
+- **Pipelock** (port 8888) handles fetch-as-a-service requests with full content
+  inspection: DLP patterns (prevents leakage of API keys, tokens, credentials),
+  SSRF protection (blocks private/internal IP ranges), and prompt-injection
+  detection on responses.
+
+Both share the same blocking data: domain blocklists (known malware/tracking
+domains), GeoIP country-level blocking (sanctioned countries), and automated
+threat intelligence feeds (daily-refreshed community blocklists). ACL files
+are regenerated and hot-reloaded after each refresh cycle.
+
+**Config:** `pipelock.yaml`, `proxy/squid.conf`, `proxy/geo-blocked-countries.conf`
 
 #### Threat Intelligence Feeds
 
@@ -60,11 +72,11 @@ The proxy automatically aggregates three external threat intelligence feeds
 into the domain blocklist, refreshed daily at 04:00 UTC via cron. Hand-curated
 entries from `pipelock.yaml` are always preserved.
 
-| Feed | Source | Content |
-|------|--------|---------|
-| HaGeZi TIF | [GitHub](https://github.com/hagezi/dns-blocklists) | Curated threat intelligence — C2, malware, phishing (~670K domains) |
-| urlhaus-filter | [GitLab Pages](https://malware-filter.gitlab.io/malware-filter/) | Active malware distribution domains (URLhaus data) |
-| phishing-filter | [GitLab Pages](https://malware-filter.gitlab.io/malware-filter/) | Active phishing domains |
+| Feed            | Source                                                           | Content                                                             |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| HaGeZi TIF      | [GitHub](https://github.com/hagezi/dns-blocklists)               | Curated threat intelligence — C2, malware, phishing (~670K domains) |
+| urlhaus-filter  | [GitLab Pages](https://malware-filter.gitlab.io/malware-filter/) | Active malware distribution domains (URLhaus data)                  |
+| phishing-filter | [GitLab Pages](https://malware-filter.gitlab.io/malware-filter/) | Active phishing domains                                             |
 
 Each feed downloads independently with per-feed cache fallback — a single
 upstream outage won't remove protection from the other feeds. Pipelock
@@ -73,10 +85,11 @@ requires a container restart to reload the merged config (same as GeoIP).
 ### Layer 2 -- Docker Sandbox Isolation
 
 Agent code execution (shell commands, scripts) runs inside throwaway Docker
-containers rather than on the host. The gateway spawns sandboxes from a
-locked-down image with no network access except through Pipelock, preventing
-a prompt-injected agent from touching the host filesystem or making unproxied
-network calls.
+containers rather than on the host. Sandbox containers join the `proxy-net`
+network and route all HTTPS traffic through Squid (port 3128) via standard
+`HTTP_PROXY`/`HTTPS_PROXY` environment variables. The public agent's sandbox
+has `network: "none"` (fully isolated). This prevents a prompt-injected agent
+from touching the host filesystem or making unproxied network calls.
 
 **Config:** `docker-compose.yml` (network topology), sandbox images
 
@@ -152,6 +165,7 @@ daemon mode, `autoStart: false`).
 ### Slack
 
 Requires a Slack App with Socket Mode:
+
 1. Create app at https://api.slack.com/apps
 2. Enable Socket Mode, generate App-Level Token (`xapp-...`)
 3. Add bot scopes: `app_mentions:read`, `channels:history`, `chat:write`, etc.
@@ -161,15 +175,17 @@ Requires a Slack App with Socket Mode:
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Service definitions and network topology |
-| `pipelock.yaml` | Egress proxy policy (DLP, blocklist, SSRF) |
-| `.env.example` | Environment variable template |
-| `openclaw.example.json` | Gateway and agent config template |
-| `setup.sh` | First-time deployment setup |
-| `verify.sh` | End-to-end security verification |
-| `proxy/` | Pipelock custom image (GeoIP + threat feeds) |
-| `proxy/refresh-threats.sh` | Threat intelligence feed aggregation script |
-| `signal/` | signal-cli daemon image |
-| `skills/` | ClawSec cognitive defense skills |
+| File                           | Purpose                                          |
+| ------------------------------ | ------------------------------------------------ |
+| `docker-compose.yml`           | Service definitions and network topology         |
+| `pipelock.yaml`                | Egress proxy policy (DLP, blocklist, SSRF)       |
+| `.env.example`                 | Environment variable template                    |
+| `openclaw.example.json`        | Gateway and agent config template                |
+| `setup.sh`                     | First-time deployment setup                      |
+| `verify.sh`                    | End-to-end security verification                 |
+| `proxy/`                       | Proxy image (Squid + Pipelock + GeoIP + threats) |
+| `proxy/squid.conf`             | Squid CONNECT proxy configuration                |
+| `proxy/generate-squid-acls.sh` | Generates Squid ACL files from Pipelock config   |
+| `proxy/refresh-threats.sh`     | Threat intelligence feed aggregation script      |
+| `signal/`                      | signal-cli daemon image                          |
+| `skills/`                      | ClawSec cognitive defense skills                 |

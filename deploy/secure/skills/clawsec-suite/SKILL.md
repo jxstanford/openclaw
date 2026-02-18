@@ -1,14 +1,7 @@
 ---
 name: clawsec-suite
 description: "Cognitive-layer security for OpenClaw agents. Monitors workspace file integrity, runs scheduled security audits, and provides CVE/advisory feeds. Complements container isolation and network filtering."
-metadata:
-  {
-    "openclaw":
-      {
-        "emoji": "🛡️",
-        "requires": { "bins": ["sha256sum"] },
-      },
-  }
+metadata: { "openclaw": { "emoji": "🛡️", "requires": { "bins": ["sha256sum"] } } }
 ---
 
 # ClawSec Security Suite

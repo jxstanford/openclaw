@@ -5,335 +5,378 @@
   // Hardened per Semgrep cheat sheet and OpenClaw security guide
 
   // ── Gateway ──────────────────────────────────────────────────
-  gateway: {
-    mode: "local",
-    port: 18789,
-    bind: "lan",
-    controlUi: {
-      enabled: true,
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "controlUi": {
+      "enabled": true,
       // Device pairing requires WebCrypto (HTTPS). Docker port mapping serves
       // HTTP, so device identity cannot work. Token auth still protects access.
       // Set to false once Tailscale Serve provides HTTPS.
-      allowInsecureAuth: true,
+      "allowInsecureAuth": true
     },
-    auth: {
-      mode: "token",
+    "auth": {
+      "mode": "token",
       // Token injected via OPENCLAW_GATEWAY_TOKEN env var in docker-compose.
       // allowTailscale: gateway trusts Tailscale identity headers when present.
       // Tailscale Serve is configured on the host, not inside the container:
       //   tailscale serve --bg http://localhost:18789
-      allowTailscale: true,
+      "allowTailscale": true
     },
-    reload: { mode: "hybrid", debounceMs: 300 },
+    "reload": { "mode": "hybrid", "debounceMs": 300 }
   },
 
   // ── Logging ──────────────────────────────────────────────────
-  logging: {
-    level: "info",
-    consoleLevel: "info",
-    consoleStyle: "pretty",
-    redactSensitive: "tools",
+  "logging": {
+    "level": "info",
+    "consoleLevel": "info",
+    "consoleStyle": "pretty",
+    "redactSensitive": "tools"
   },
 
   // ── Session Security ─────────────────────────────────────────
-  session: {
-    dmScope: "per-channel-peer",
-    reset: {
-      mode: "daily",
-      atHour: 4,
-      idleMinutes: 60,
-    },
+  "session": {
+    "dmScope": "per-channel-peer",
+    "reset": {
+      "mode": "daily",
+      "atHour": 4,
+      "idleMinutes": 60
+    }
   },
 
   // ── Skills ───────────────────────────────────────────────────
-  skills: {
-    load: {
-      extraDirs: ["/home/node/.openclaw/skills"],
-    },
+  "skills": {
+    "load": {
+      "extraDirs": ["/home/node/.openclaw/skills"]
+    }
   },
 
   // ── Cron (ClawSec scheduled tasks) ───────────────────────────
-  cron: {
-    enabled: true,
+  "cron": {
+    "enabled": true
   },
 
   // ── Agent Definitions ────────────────────────────────────────
-  agents: {
-    defaults: {
-      workspace: "/home/node/.openclaw/workspace",
-      model: {
-        primary: "anthropic/claude-sonnet-4-5",
-        fallbacks: ["anthropic/claude-opus-4-6"],
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5",
+        "fallbacks": ["anthropic/claude-opus-4-6"]
       },
-      userTimezone: "America/Los_Angeles",
-      thinkingDefault: "low",
-      timeoutSeconds: 600,
-      maxConcurrent: 3,
+      "userTimezone": "America/Los_Angeles",
+      "thinkingDefault": "low",
+      "timeoutSeconds": 600,
+      "maxConcurrent": 3,
 
-      // Default sandbox — all sessions sandboxed
-      sandbox: {
-        mode: "all",
-        scope: "agent",
-        docker: {
-          image: "openclaw-sandbox-common:bookworm-slim",
-          workdir: "/workspace",
-          readOnlyRoot: true,
-          tmpfs: ["/tmp", "/var/tmp", "/run"],
-          user: "1000:1000",
-          network: "none",
-          capDrop: ["ALL"],
-          pidsLimit: 256,
-          memory: "2g",
+      // Default sandbox — all sessions sandboxed, no network
+      "sandbox": {
+        "mode": "all",
+        "scope": "agent",
+        "docker": {
+          "image": "openclaw-sandbox-common:bookworm-slim",
+          "workdir": "/workspace",
+          "readOnlyRoot": true,
+          "tmpfs": ["/tmp", "/var/tmp", "/run"],
+          "user": "1000:1000",
+          "network": "none",
+          "capDrop": ["ALL"],
+          "pidsLimit": 256,
+          "memory": "2g"
         },
-        browser: { enabled: false },
+        "browser": { "enabled": false }
       },
 
       // Default memory search — session transcript indexing enabled
-      memorySearch: {
-        enabled: true,
-        sources: ["memory", "sessions"],
-        experimental: { sessionMemory: true },
-        query: {
-          maxResults: 10,
-          hybrid: {
-            enabled: true,
-            vectorWeight: 0.7,
-            textWeight: 0.3,
-          },
+      "memorySearch": {
+        "enabled": true,
+        "sources": ["memory", "sessions"],
+        "experimental": { "sessionMemory": true },
+        "query": {
+          "maxResults": 10,
+          "hybrid": {
+            "enabled": true,
+            "vectorWeight": 0.7,
+            "textWeight": 0.3
+          }
         },
-        sync: {
-          onSessionStart: true,
-          onSearch: true,
-          watch: true,
-          intervalMinutes: 60,
-        },
-      },
+        "sync": {
+          "onSessionStart": true,
+          "onSearch": true,
+          "watch": true,
+          "intervalMinutes": 60
+        }
+      }
     },
 
-    list: [
+    "list": [
       // ── Personal Agent ─────────────────────────────────────
       // Full access, sandboxed with Pipelock egress.
       // Primary daily-driver agent.
       {
-        id: "personal",
-        default: true,
-        name: "Personal",
-        workspace: "/home/node/.openclaw/workspace",
-        skills: ["clawsec-suite"],
+        "id": "personal",
+        "default": true,
+        "name": "Personal",
+        "workspace": "/home/node/.openclaw/workspace",
+        "skills": ["clawsec-suite"],
 
-        sandbox: {
-          mode: "all",
-          workspaceAccess: "rw",
-          docker: {
-            image: "openclaw-sandbox-common:bookworm-slim",
-            readOnlyRoot: false,
-            network: "bridge",
-            env: {
-              HTTP_PROXY: "http://pipelock:8888",
-              HTTPS_PROXY: "http://pipelock:8888",
-              NO_PROXY: "localhost,127.0.0.1",
-            },
-            binds: [
-              "/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro",
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "rw",
+          "docker": {
+            "image": "openclaw-sandbox-common:bookworm-slim",
+            "readOnlyRoot": false,
+            "user": "0:0",
+            "network": "proxy-net",
+            "capDrop": [
+              "CHOWN",
+              "KILL",
+              "NET_BIND_SERVICE",
+              "NET_RAW",
+              "SETFCAP",
+              "SETGID",
+              "SETPCAP",
+              "SETUID",
+              "SYS_CHROOT",
+              "MKNOD",
+              "AUDIT_WRITE"
             ],
-          },
-          browser: {
-            enabled: true,
-            image: "openclaw-sandbox-browser:bookworm-slim",
-          },
-        },
-
-        tools: {
-          profile: "full",
-          elevated: {
-            enabled: true,
-            allowFrom: {
-              // Replace with your actual channel IDs
-              whatsapp: ["PERSONAL_WHATSAPP_NUMBER"],
-              telegram: ["PERSONAL_TELEGRAM_ID"],
+            "securityOpt": ["label:disable"],
+            "tmpfs": ["/tmp", "/var/tmp", "/run"],
+            "pidsLimit": 256,
+            "memory": "2g",
+            "env": {
+              "HTTP_PROXY": "http://pipelock:3128",
+              "HTTPS_PROXY": "http://pipelock:3128",
+              "NO_PROXY": "localhost,127.0.0.1",
+              "GITHUB_TOKEN": "YOUR_GITHUB_PAT",
+              "LINEAR_API_KEY": "YOUR_LINEAR_API_KEY"
             },
+            "binds": ["/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro"]
           },
-          exec: {
-            host: "sandbox",
-            security: "full",
-            timeoutSec: 1800,
-          },
+          "browser": {
+            "enabled": true,
+            "image": "openclaw-sandbox-browser:bookworm-slim"
+          }
         },
 
-        memorySearch: {
-          enabled: true,
-          sources: ["memory", "sessions"],
-          experimental: { sessionMemory: true },
-          extraPaths: ["/shared-knowledge"],
+        "tools": {
+          "profile": "full",
+          "elevated": {
+            "enabled": true,
+            "allowFrom": {
+              // Replace with your actual channel IDs
+              "whatsapp": ["PERSONAL_WHATSAPP_NUMBER"],
+              "telegram": ["PERSONAL_TELEGRAM_ID"]
+            }
+          },
+          "exec": {
+            "host": "sandbox",
+            "security": "full",
+            "timeoutSec": 1800
+          }
         },
+
+        "memorySearch": {
+          "enabled": true,
+          "sources": ["memory", "sessions"],
+          "experimental": { "sessionMemory": true },
+          "extraPaths": ["/shared-knowledge"]
+        }
       },
 
       // ── Work Agent ─────────────────────────────────────────
       // Scoped workspace, restricted tools.
       // Handles Slack/Teams context.
       {
-        id: "work",
-        name: "Work",
-        workspace: "/home/node/.openclaw/workspace-work",
-        skills: ["clawsec-suite"],
+        "id": "work",
+        "name": "Work",
+        "workspace": "/home/node/.openclaw/workspace-work",
+        "skills": ["clawsec-suite"],
 
-        sandbox: {
-          mode: "all",
-          workspaceAccess: "rw",
-          docker: {
-            image: "openclaw-sandbox-common:bookworm-slim",
-            readOnlyRoot: false,
-            network: "bridge",
-            env: {
-              HTTP_PROXY: "http://pipelock:8888",
-              HTTPS_PROXY: "http://pipelock:8888",
-              NO_PROXY: "localhost,127.0.0.1",
-            },
-            binds: [
-              "/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro",
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "rw",
+          "docker": {
+            "image": "openclaw-sandbox-common:bookworm-slim",
+            "readOnlyRoot": false,
+            "user": "0:0",
+            "network": "proxy-net",
+            "capDrop": [
+              "CHOWN",
+              "KILL",
+              "NET_BIND_SERVICE",
+              "NET_RAW",
+              "SETFCAP",
+              "SETGID",
+              "SETPCAP",
+              "SETUID",
+              "SYS_CHROOT",
+              "MKNOD",
+              "AUDIT_WRITE"
             ],
-          },
+            "securityOpt": ["label:disable"],
+            "tmpfs": ["/tmp", "/var/tmp", "/run"],
+            "pidsLimit": 256,
+            "memory": "2g",
+            "env": {
+              "HTTP_PROXY": "http://pipelock:3128",
+              "HTTPS_PROXY": "http://pipelock:3128",
+              "NO_PROXY": "localhost,127.0.0.1",
+              "GITHUB_TOKEN": "YOUR_GITHUB_PAT",
+              "LINEAR_API_KEY": "YOUR_LINEAR_API_KEY"
+            },
+            "binds": ["/home/node/.openclaw/shared-knowledge:/shared-knowledge:ro"]
+          }
         },
 
-        tools: {
-          profile: "coding",
-          deny: ["browser", "canvas", "nodes", "cron", "gateway"],
-          exec: {
-            host: "sandbox",
-            security: "full",
-            timeoutSec: 1800,
-          },
+        "tools": {
+          "profile": "coding",
+          "deny": ["browser", "canvas", "nodes", "cron", "gateway"],
+          "exec": {
+            "host": "sandbox",
+            "security": "full",
+            "timeoutSec": 1800
+          }
         },
 
-        memorySearch: {
-          enabled: true,
-          sources: ["memory", "sessions"],
-          experimental: { sessionMemory: true },
-          extraPaths: ["/shared-knowledge"],
-        },
+        "memorySearch": {
+          "enabled": true,
+          "sources": ["memory", "sessions"],
+          "experimental": { "sessionMemory": true },
+          "extraPaths": ["/shared-knowledge"]
+        }
       },
 
       // ── Public Agent ───────────────────────────────────────
       // Maximum lockdown. Chat only, no tools, no network.
       // Exposed to untrusted users (Discord).
       {
-        id: "public",
-        name: "Public",
-        workspace: "/home/node/.openclaw/workspace-public",
-        skills: ["clawsec-suite"],
+        "id": "public",
+        "name": "Public",
+        "workspace": "/home/node/.openclaw/workspace-public",
+        "skills": ["clawsec-suite"],
 
-        identity: {
-          name: "Assistant",
-          theme: "helpful but cautious assistant",
+        "identity": {
+          "name": "Assistant",
+          "theme": "helpful but cautious assistant"
         },
 
-        sandbox: {
-          mode: "all",
-          workspaceAccess: "none",
-          docker: {
-            image: "openclaw-sandbox:bookworm-slim",
-            readOnlyRoot: true,
-            network: "none",
-            tmpfs: ["/tmp"],
-            pidsLimit: 64,
-            memory: "512m",
-          },
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "none",
+          "docker": {
+            "image": "openclaw-sandbox:bookworm-slim",
+            "readOnlyRoot": true,
+            "network": "none",
+            "tmpfs": ["/tmp"],
+            "pidsLimit": 64,
+            "memory": "512m"
+          }
         },
 
-        tools: {
-          deny: [
-            "exec", "process",
-            "read", "write", "edit", "apply_patch",
-            "browser", "canvas",
-            "nodes", "cron", "gateway",
+        "tools": {
+          "deny": [
+            "exec",
+            "process",
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "browser",
+            "canvas",
+            "nodes",
+            "cron",
+            "gateway"
           ],
-          exec: {
-            security: "deny",
-          },
+          "exec": {
+            "security": "deny"
+          }
         },
 
-        memorySearch: {
-          enabled: false,
-        },
-      },
-    ],
+        "memorySearch": {
+          "enabled": false
+        }
+      }
+    ]
   },
 
   // ── Channel-to-Agent Bindings ────────────────────────────────
-  bindings: [
+  "bindings": [
     // Personal channels -> personal agent
-    { agentId: "personal", match: { channel: "whatsapp" } },
-    { agentId: "personal", match: { channel: "telegram" } },
-    { agentId: "personal", match: { channel: "signal" } },
+    { "agentId": "personal", "match": { "channel": "whatsapp" } },
+    { "agentId": "personal", "match": { "channel": "telegram" } },
+    { "agentId": "personal", "match": { "channel": "signal" } },
 
     // Work channels -> work agent
-    { agentId: "work", match: { channel: "slack" } },
+    { "agentId": "work", "match": { "channel": "slack" } },
 
     // Public channels -> public agent
-    { agentId: "public", match: { channel: "discord" } },
+    { "agentId": "public", "match": { "channel": "discord" } }
   ],
 
   // ── Channel Security ─────────────────────────────────────────
-  channels: {
-    whatsapp: {
-      dmPolicy: "pairing",
-      allowFrom: ["PERSONAL_WHATSAPP_NUMBER"],
-      groupPolicy: "allowlist",
-      groupAllowFrom: ["PERSONAL_WHATSAPP_NUMBER"],
-      groups: { "*": { requireMention: true } },
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "pairing",
+      "allowFrom": ["PERSONAL_WHATSAPP_NUMBER"],
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["PERSONAL_WHATSAPP_NUMBER"],
+      "groups": { "*": { "requireMention": true } }
     },
-    telegram: {
-      enabled: true,
-      allowFrom: ["PERSONAL_TELEGRAM_ID"],
-      groupPolicy: "allowlist",
-      groupAllowFrom: ["PERSONAL_TELEGRAM_ID"],
-      groups: { "*": { requireMention: true } },
+    "telegram": {
+      "enabled": true,
+      "allowFrom": ["PERSONAL_TELEGRAM_ID"],
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["PERSONAL_TELEGRAM_ID"],
+      "groups": { "*": { "requireMention": true } }
     },
-    discord: {
-      enabled: true,
-      dm: { enabled: false },
+    "discord": {
+      "enabled": true,
+      "dm": { "enabled": false },
       // Configure guild IDs for public agent
-      guilds: {
-        DISCORD_GUILD_ID: {
-          requireMention: true,
-        },
-      },
+      "guilds": {
+        "DISCORD_GUILD_ID": {
+          "requireMention": true
+        }
+      }
     },
-    slack: {
-      enabled: true,
-      mode: "socket",
-      dm: { enabled: true, allowFrom: ["SLACK_USER_ID"] },
-      channels: {
+    "slack": {
+      "enabled": true,
+      "mode": "socket",
+      "dm": { "enabled": true, "allowFrom": ["SLACK_USER_ID"] },
+      "channels": {
         // Add allowed channels
-      },
+      }
     },
     // Signal via external signal-cli daemon (Docker container)
-    signal: {
-      enabled: true,
-      httpUrl: "http://signal-cli:8080",
-      autoStart: false,
-      dmPolicy: "pairing",
-      groupPolicy: "allowlist",
-      sendReadReceipts: true,
-      groups: { "*": { requireMention: true } },
-    },
+    "signal": {
+      "enabled": true,
+      "httpUrl": "http://signal-cli:8080",
+      "autoStart": false,
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "sendReadReceipts": true,
+      "groups": { "*": { "requireMention": true } }
+    }
   },
 
   // ── Global Tool Settings ─────────────────────────────────────
-  tools: {
-    exec: {
-      host: "sandbox",
-      backgroundMs: 10000,
-      timeoutSec: 1800,
-      cleanupMs: 1800000,
+  "tools": {
+    "exec": {
+      "host": "sandbox",
+      "backgroundMs": 10000,
+      "timeoutSec": 1800,
+      "cleanupMs": 1800000
     },
-    elevated: {
-      enabled: true,
-      allowFrom: {
+    "elevated": {
+      "enabled": true,
+      "allowFrom": {
         // Replace with your actual channel IDs
-        whatsapp: ["PERSONAL_WHATSAPP_NUMBER"],
-        telegram: ["PERSONAL_TELEGRAM_ID"],
-      },
-    },
-  },
+        "whatsapp": ["PERSONAL_WHATSAPP_NUMBER"],
+        "telegram": ["PERSONAL_TELEGRAM_ID"]
+      }
+    }
+  }
 }
